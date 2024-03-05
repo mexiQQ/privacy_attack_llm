@@ -1,0 +1,5 @@
+*.pth
+__pycache__/
+scikit-tensor/
+outputs/
+logs/*
