@@ -3,11 +3,6 @@ import torch.nn.functional as F
 from constants import BERT_CLS_TOKEN, BERT_SEP_TOKEN, BERT_PAD_TOKEN
 import numpy as np
 from scipy.spatial import distance
-from b import (
-    no_tenfact,
-    matlab_eigs,
-    matlab_eigs2
-)
 
 class CosineSimilarityLoss(torch.nn.Module):
     def __init__(self):

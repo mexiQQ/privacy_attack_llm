@@ -16,11 +16,11 @@ def compute_grads(model, x_embeds, y_labels, create_graph=False, return_pooler=F
     else:
         return compute_grads_neither_odds_or_even(model, x_embeds, y_labels, create_graph=create_graph, return_pooler=return_pooler, return_first_token_tensor=return_first_token_tensor, cheat=cheat, args=args)
 
-def compute_grads_tanh(model, x_embeds, y_labels, create_graph=False, return_pooler=False, return_first_token_tensor=False, cheat=False, debug=False, args=None):  
-      outs, ori_pooler_dense_input = model(
-        inputs_embeds=x_embeds, 
-        labels=y_labels, 
-        return_first_token_tensor=True)
+def compute_grads_tanh(model, x_embeds, y_labels, create_graph=False, return_pooler=False, return_first_token_tensor=False, cheat=False, args=None):  
+    outs, ori_pooler_dense_input = model(
+    inputs_embeds=x_embeds, 
+    labels=y_labels, 
+    return_first_token_tensor=True)
     gradients = torch.autograd.grad(outs.loss, model.parameters(), create_graph=create_graph, allow_unused=True)
 
     if not return_pooler:
@@ -226,7 +226,7 @@ def compute_grads_tanh(model, x_embeds, y_labels, create_graph=False, return_poo
     #     print(f"Sample: {i}", norm_error_M, norm_error_V, norm_xi)
 
     ######################################################################
-    highest, highest_index = find_highest_indices(B, new_recX, ori_pooler_dense_input)
+    highest, highest_index = find_highest_indices(B, new_recX, ori_pooler_dense_input, args)
     print("average of cosine similarity",sum(highest)/B)
     print("highest_index", highest_index)
     print("highest", highest)
@@ -236,7 +236,7 @@ def compute_grads_tanh(model, x_embeds, y_labels, create_graph=False, return_poo
 
     return gradients, pooler_target, sum(highest)/B, highest
 
-def compute_grads_neither_odds_or_even(model, x_embeds, y_labels, create_graph=False, return_pooler=False, return_first_token_tensor=False, cheat=False, debug=False, args=None):
+def compute_grads_neither_odds_or_even(model, x_embeds, y_labels, create_graph=False, return_pooler=False, return_first_token_tensor=False, cheat=False, args=None):
     # outs, ori_pooler_dense_input, pooled_output, pooled_output_before_activation = model(
     #     inputs_embeds=x_embeds, 
     #     labels=y_labels, 

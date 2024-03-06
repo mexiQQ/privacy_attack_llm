@@ -2,6 +2,7 @@ import sys, argparse
 import os
 import datetime
 import itertools
+import random
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -9,7 +10,7 @@ import torch.optim as optim
 from datasets import load_metric
 from nlp_utils import load_gpt2_from_dict
 from transformers import AdamW, AutoConfig, AutoModel, AutoTokenizer, LogitsProcessor, BeamSearchScorer
-from models.modeling_bert import AutoModelForSequenceClassification
+from models.modeling_bert import BertForSequenceClassification 
 from init import get_init
 from constants import BERT_CLS_TOKEN, BERT_SEP_TOKEN, BERT_PAD_TOKEN
 from utilities import get_closest_tokens, get_reconstruction_loss, get_perplexity, fix_special_tokens, remove_padding
@@ -314,14 +315,14 @@ def main():
     dataset = TextDataset(args.device, args.dataset, args.split, args.n_inputs, args.batch_size)
 
     lm = load_gpt2_from_dict(
-        "transformer_wikitext-103.pth", 
+        args.lm_path, 
         device, 
         output_hidden_states=True).to(device)
     
     ###################################
     ########## load model
     ###################################
-    model = AutoModelForSequenceClassification.from_pretrained(
+    model = BertForSequenceClassification.from_pretrained(
         args.bert_path, 
         ignore_mismatched_sizes=True).to(device)
     original_hidden_dimention = model.config.hidden_size
@@ -348,7 +349,7 @@ def main():
         model.classifier.bias.data.copy_(state_dict["classifier.bias"])
         #model.classifier.bias.data.copy_(torch.full((2,), 0))
 
-    if add_noise_to_params == "yes":
+    if args.add_noise_to_params == "yes":
         add_noise_to_model(model, 0.00001)
 
     lm.eval()

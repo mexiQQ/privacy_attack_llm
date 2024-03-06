@@ -20,6 +20,7 @@ def get_args():
 
     # Model path (defaults to huggingface download, use local path if offline)
     parser.add_argument('--bert_path', type=str, default='bert-base-uncased')
+    parser.add_argument('--lm_path', type=str, default='lm model path')
 
     # Frozen params
     parser.add_argument('--device', type=str, default='cuda')
@@ -37,7 +38,7 @@ def get_args():
     parser.add_argument('--init_size', type=float, default=1.4) #
     parser.add_argument('--lr_decay_type', type=str, default='StepLR')
 
-    # new parameters
+    # new parameters 
     parser.add_argument('--act', type=str, default='relu')
     parser.add_argument('--coeff_pooler_match', type=float, default=0.1) #
     parser.add_argument('--coeff_pooler_match_margin', type=float, default=0.0) #
