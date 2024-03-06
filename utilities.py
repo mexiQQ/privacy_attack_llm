@@ -16,24 +16,18 @@ class CosineSimilarityLoss(torch.nn.Module):
 
     def forward(self, input, target, thresholds=None, margin=0.0):
         cos_sim = self.cosine_similarity(input, target).abs()
-        # import pdb; pdb.set_trace()
         
         if thresholds != None: 
             thresholds = torch.tensor(thresholds, device=cos_sim.device)
-            # print("origin_cos", cos_sim)
-            # print("thresholds", thresholds)
 
             cos_sim = cos_sim + margin
             cos_sim = torch.where(cos_sim >= thresholds, 1.0, cos_sim)
-            # print("updated cos", cos_sim)
 
         loss = 1 - (cos_sim ** 2).mean()  # You can also use: (1 - cos_sim).mean()
         return loss
     
 COSINE_LOSS = CosineSimilarityLoss()
  
-
-
 def grad_dist(grads1, grads2, args):
     ret = 0.0
     n_g = 0
@@ -70,15 +64,12 @@ def get_closest_tokens(inputs_embeds, unused_tokens, embeddings_weight, metric='
 
 # global_door = [False]
 def get_reconstruction_loss(model, x_embeds, y_labels, true_grads, args, create_graph=False, true_pooler=None, debug=False, thresholds=None):
-    grads, pooler_first_token = compute_grads(model, x_embeds, y_labels, create_graph=create_graph, 
+    grads, pooler_first_token = compute_grads(model, x_embeds, y_labels, args, create_graph=create_graph, 
         return_first_token_tensor=True)
     if true_pooler is not None:
         input = pooler_first_token[:, :args.rd]
         input = input / torch.linalg.norm(input, ord=2, dim=1, keepdim=True)
-        if debug:
-            cosine_loss = COSINE_LOSS(input, true_pooler, thresholds, margin=args.coeff_pooler_match_margin)
-        else:
-            cosine_loss = COSINE_LOSS(input, true_pooler, thresholds, margin=args.coeff_pooler_match_margin)
+        cosine_loss = COSINE_LOSS(input, true_pooler, thresholds, margin=args.coeff_pooler_match_margin)
         
         # cosine_loss = torch.tensor(0.0)
         # cosine_loss = torch.maximum(cosine_loss - 0.1, torch.tensor(0.0))
@@ -152,9 +143,6 @@ def remove_padding(tokenizer, ids):
             break
     return tokenizer.decode(ids)
 
-
-
-
 ######################################################################
 ######################################################################
 ######################################################################
@@ -163,305 +151,14 @@ def remove_padding(tokenizer, ids):
 ######################################################################
 ######################################################################
 
-
-
-
-def compute_pooler(model, x_embeds, y_labels):
-    outs, ori_pooler_dense_input = model(
-        inputs_embeds=x_embeds, 
-        labels=y_labels, 
-        return_first_token_tensor=True)
-    loss = outs.loss
-    loss.backward()
-
-    sub_dimension = 100
-    m = 30000
-    d = sub_dimension
-    B = 1
-    Beta = 2
-            
-    g = model.classifier.weight.grad.cpu().numpy()[1].reshape(m) #1 x m
-    W = model.bert.pooler.dense.weight.data[:, :sub_dimension].cpu().numpy() #m, d
-
-    M = np.zeros((d, d))
-    aa = np.sum(g)
-
-    for i in range(d): #768
-        for j in range(d): #768
-            M[i, j] = np.sum(g * W[:, i] * W[:, j])
-            if i == j:
-                M[i, i] = M[i, i] - aa
-
-    V, D = matlab_eigs(M, Beta)
-    WV = W @ V
-
-    T = np.zeros((Beta, Beta, Beta))
-    for i in range(Beta):
-        for j in range(i, Beta):
-            for k in range(j, Beta):
-                T[i, j, k] = np.sum(g * WV[:, i] * WV[:, j] * WV[:, k])
-                T[i, k, j] = T[i, j, k]
-                T[j, i, k] = T[i, j, k]
-                T[j, k, i] = T[i, j, k]
-                T[k, i, j] = T[i, j, k]
-                T[k, j, i] = T[i, j, k]
-
-    for i in range(Beta):
-        for j in range(Beta):
-            aa = np.sum(g * WV[:, i])
-            T[i, j, j] = T[i, j, j] - aa
-            T[j, i, j] = T[j, i, j] - aa
-            T[j, j, i] = T[j, j, i] - aa
-
-    T = T / m
-    rec_X, _, misc = no_tenfact(T, 100, B)
-    new_recX = V @ rec_X
-    new_recXX = (new_recX / np.linalg.norm(new_recX, ord=2, axis=0)).transpose()        
-    
-    ######################################################################
-    new_recXX = (new_recX / np.linalg.norm(new_recX, ord=2, axis=0)).transpose()        
-    input = ori_pooler_dense_input[:, :sub_dimension].detach().cpu().numpy()
-    print(f"cosin similarity: {1-distance.cosine(new_recXX.reshape(-1), input.reshape(-1))}",
-        f"normalized error: {np.sum((new_recXX.reshape(-1) - input.reshape(-1))**2)}")
-    
-    for i in range(B):
-        new_recX[:, i] = -new_recX[:, i]
-    
-    new_recXX = (new_recX / np.linalg.norm(new_recX, ord=2, axis=0)).transpose()
-    input = ori_pooler_dense_input[:, :sub_dimension].detach().cpu().numpy()
-    print(f"cosin similarity: {1-distance.cosine(new_recXX.reshape(-1), input.reshape(-1))}",
-        f"normalized error: {np.sum((new_recXX.reshape(-1) - input.reshape(-1))**2)}")
-    ######################################################################
-    model.zero_grad()
-    for param in model.parameters():
-        param.grad = None
-    return new_recXX
-
-def compute_grads(model, x_embeds, y_labels, create_graph=False, return_pooler=False, return_first_token_tensor=False, cheat=False, debug=False):
-    outs, ori_pooler_dense_input = model(
-        inputs_embeds=x_embeds, 
-        labels=y_labels, 
-        return_first_token_tensor=True)
-    gradients = torch.autograd.grad(outs.loss, model.parameters(), create_graph=create_graph, allow_unused=True)
-    # loss = outs.loss
-    # loss.backward()
-
-    if not return_pooler:
-        if return_first_token_tensor:
-            return gradients, ori_pooler_dense_input
-        else:
-            return gradients
-        
-    if debug:
-        sub_dimension = 100 
-    else:
-        sub_dimension = 100 
-
-    m = 30000-768
-    d = sub_dimension
-    B = 1
-    Beta = 1 
-    
-    if cheat:
-        return gradients, ori_pooler_dense_input[:, :sub_dimension].detach()
-            
-    # activarteion
-    # even => even => 特殊处理
-    # odd => sigmoid/odd => 特殊处理 
-    # squer + cubic => no 特殊处理
-    
-    # g = model.classifier.weight.grad.cpu().numpy()[1].reshape(m) #1 x m
-    if debug:
-        # classification
-        # regression
-        # 30000 x 2 (:768 x 2) (768:, 2) => 1/30000 => (1/(30000-768))
-        # -1 bias -2 weights
-        g = gradients[-2].cpu().numpy()[1][768:].reshape(m)
-        # => gradient of W => 100
-    else:
-        g = gradients[-2].cpu().numpy()[1].reshape(m) #1xm
-    
-    if debug:
-        # in 768 x out 30000 (:,:768) (:, 768:) 
-        # (100:, 768:) => 0
-        # (:100, 768:) => random 
-                                                #out   #in
-        W = model.bert.pooler.dense.weight.data[768:, :100].cpu().numpy() 
-    else:
-        W = model.bert.pooler.dense.weight.data[:, :sub_dimension].cpu().numpy() #m, d
-
-    M = np.zeros((d, d))
-    aa = np.sum(g)
-
-    for i in range(d): #768
-        for j in range(d): #768
-            M[i, j] = np.sum(g * W[:, i] * W[:, j])
-            if i == j:
-                M[i, i] = M[i, i] - aa
-
-    V, D = matlab_eigs(M, Beta)
-    WV = W @ V
-
-    T = np.zeros((Beta, Beta, Beta))
-    for i in range(Beta):
-        for j in range(i, Beta):
-            for k in range(j, Beta):
-                T[i, j, k] = np.sum(g * WV[:, i] * WV[:, j] * WV[:, k])
-                T[i, k, j] = T[i, j, k]
-                T[j, i, k] = T[i, j, k]
-                T[j, k, i] = T[i, j, k]
-                T[k, i, j] = T[i, j, k]
-                T[k, j, i] = T[i, j, k]
-
-    for i in range(Beta):
-        for j in range(Beta):
-            aa = np.sum(g * WV[:, i])
-            T[i, j, j] = T[i, j, j] - aa
-            T[j, i, j] = T[j, i, j] - aa
-            T[j, j, i] = T[j, j, i] - aa
-
-    T = T / m
-    rec_X, _, misc = no_tenfact(T, 100, B)
-    new_recX = V @ rec_X
-
-    ######################################################################
-    # 768 => 1
-    input = ori_pooler_dense_input[:, :sub_dimension]
-    input = input / torch.linalg.norm(input, ord=2, dim=1, keepdim=True)
-    input = input.detach().cpu().numpy()
-    
-    # 100 => 1
-    # new_recXX = (new_recX / np.linalg.norm(new_recX, ord=2, axis=0)).transpose()
-    new_recXX = new_recX.transpose() 
-    cosin_sim = 1-distance.cosine(new_recXX.reshape(-1), input.reshape(-1))
-    print(f"cosin similarity: {cosin_sim}",
-        f"normalized error: {np.sum((new_recXX.reshape(-1) - input.reshape(-1))**2)}")
-    
-    if cosin_sim > 0:
-        if cosin_sim > 0.9:
-            pooler_target = torch.from_numpy(new_recXX).cuda()
-            return gradients, pooler_target
-        else:
-            return gradients, None
-    
-    for i in range(B):
-        new_recX[:, i] = -new_recX[:, i]
-    
-    # new_recXX = (new_recX / np.linalg.norm(new_recX, ord=2, axis=0)).transpose()
-    new_recXX = new_recX.transpose() 
-    cosin_sim = 1-distance.cosine(new_recXX.reshape(-1), input.reshape(-1))
-    print(f"cosin similarity: {cosin_sim}",
-        f"normalized error: {np.sum((new_recXX.reshape(-1) - input.reshape(-1))**2)}")
-    ######################################################################
-    if cosin_sim > 0.9:
-        pooler_target = torch.from_numpy(new_recXX).cuda()
-        return gradients, pooler_target
-    else:
-        return gradients, None
-
-def compute_grads_new(model, x_embeds, y_labels, create_graph=False, return_pooler=False, return_first_token_tensor=False, cheat=False, debug=False):
-    from attack_sheng.no_tenfact import no_tenfact
-
+def compute_grads(model, x_embeds, y_labels, args, create_graph=False, return_first_token_tensor=False):
     outs, ori_pooler_dense_input = model(
         inputs_embeds=x_embeds, 
         labels=y_labels, 
         return_first_token_tensor=True)
     gradients = torch.autograd.grad(outs.loss, model.parameters(), create_graph=create_graph, allow_unused=True)
 
-    if not return_pooler:
-        if return_first_token_tensor:
-            return gradients, ori_pooler_dense_input
-        else:
-            return gradients
-        
-    if debug:
-        sub_dimension = 100 
+    if return_first_token_tensor:
+        return gradients, ori_pooler_dense_input
     else:
-        sub_dimension = 100 
-    m = 30000-768
-    d = sub_dimension
-    B = 1
-    Beta = 1
-    
-    if cheat:
-        return gradients, ori_pooler_dense_input[:, :sub_dimension].detach()
-            
-    # g = model.classifier.weight.grad.cpu().numpy()[1].reshape(m) #1 x m
-    if debug:
-        g = gradients[-2].cpu().numpy()[1][768:].reshape(m)
-    else:
-        g = gradients[-2].cpu().numpy()[1].reshape(m) #1xm
-    
-    if debug:
-        W = model.bert.pooler.dense.weight.data[768:, :sub_dimension].cpu().numpy() 
-    else:
-        W = model.bert.pooler.dense.weight.data[:, :sub_dimension].cpu().numpy() #m, d
-        
-    M = np.zeros((d, d))
-    aa = np.sum(g)
-
-    for i in range(d): #768
-        for j in range(d): #768
-            M[i, j] = np.sum(g * W[:, i] * W[:, j])
-            if i == j:
-                M[i, i] = M[i, i] - aa
-
-    V, D = matlab_eigs2(M, Beta)
-    WV = W @ V
-
-    T = np.zeros((Beta, Beta, Beta))
-    for i in range(Beta):
-        for j in range(i, Beta):
-            for k in range(j, Beta):
-                T[i, j, k] = np.sum(g * WV[:, i] * WV[:, j] * WV[:, k])
-                T[i, k, j] = T[i, j, k]
-                T[j, i, k] = T[i, j, k]
-                T[j, k, i] = T[i, j, k]
-                T[k, i, j] = T[i, j, k]
-                T[k, j, i] = T[i, j, k]
-
-    for i in range(Beta):
-        for j in range(Beta):
-            aa = np.sum(g * WV[:, i])
-            T[i, j, j] = T[i, j, j] - aa
-            T[j, i, j] = T[j, i, j] - aa
-            T[j, j, i] = T[j, j, i] - aa
-
-    T = T / m
-    rec_X, _, misc = no_tenfact(T, 100, B)
-    new_recX = V @ rec_X
-    
-    ######################################################################
-    # 768 => 1
-    input = ori_pooler_dense_input[:, :sub_dimension]
-    input = input / torch.linalg.norm(input, ord=2, dim=1, keepdim=True)
-    input = input.detach().cpu().numpy()
-    
-    # 100 => 1
-    # new_recXX = (new_recX / np.linalg.norm(new_recX, ord=2, axis=0)).transpose()
-    new_recXX = new_recX.transpose() 
-    cosin_sim = 1-distance.cosine(new_recXX.reshape(-1), input.reshape(-1))
-    print(f"cosin similarity: {cosin_sim}",
-        f"normalized error: {np.sum((new_recXX.reshape(-1) - input.reshape(-1))**2)}")
-    
-    if cosin_sim > 0:
-        if cosin_sim > 0.9:
-            pooler_target = torch.from_numpy(new_recXX).cuda()
-            return gradients, pooler_target
-        else:
-            return gradients, None
-    
-    for i in range(B):
-        new_recX[:, i] = -new_recX[:, i]
-    
-    # new_recXX = (new_recX / np.linalg.norm(new_recX, ord=2, axis=0)).transpose()
-    new_recXX = new_recX.transpose() 
-    cosin_sim = 1-distance.cosine(new_recXX.reshape(-1), input.reshape(-1))
-    print(f"cosin similarity: {cosin_sim}",
-        f"normalized error: {np.sum((new_recXX.reshape(-1) - input.reshape(-1))**2)}")
-    ######################################################################
-    if cosin_sim > 0.9:
-        pooler_target = torch.from_numpy(new_recXX).cuda()
-        return gradients, pooler_target
-    else:
-        return gradients, None
+        return gradients

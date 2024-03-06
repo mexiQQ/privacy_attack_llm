@@ -649,8 +649,9 @@ class BertPooler(nn.Module):
     def __init__(self, config):
         super().__init__()
         # self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.dense = nn.Linear(config.hidden_size, 30000)
-        self.mode = os.environ.get('MODE', 'Unknown') 
+        self.pooler_hidden_dimenstion = int(os.environ.get('pooler_hidden_dimention', '30000'))
+        self.dense = nn.Linear(config.hidden_size, self.pooler_hidden_dimenstion)
+        self.mode = os.environ.get('ACT', 'Unknown') 
         if self.mode == "tanh":
             self.activation = nn.Tanh()
         elif self.mode == "cude+squre":
@@ -667,17 +668,13 @@ class BertPooler(nn.Module):
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         # We "pool" the model by simply taking the hidden state corresponding
         # to the first token.
-        first_token_tensor = hidden_states[:, 0] # BxS[0]Xd => B x 1 x d => B x d
-        first_token_tensor = first_token_tensor / torch.linalg.norm(first_token_tensor, ord=2, dim=1, keepdim=True)
+        first_token_tensor = hidden_states[:, 0]
+        first_token_tensor = first_token_tensor / torch.linalg.norm(
+            first_token_tensor, ord=2, dim=1, keepdim=True)
         pooled_output_before_activation = self.dense(first_token_tensor)
-        # pooled_output_before_activation = pooled_output_before_activation + (pooled_output_before_activation**2).sum(dim=0).sqrt() * 0.1 
         pooled_output = self.activation(pooled_output_before_activation)
         return pooled_output, first_token_tensor
     
-    # => 30000 x 2 
-    # => [:768] true,  [768:] => (1/30000)
-    
-
 class BertPredictionHeadTransform(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -1544,7 +1541,8 @@ class BertForSequenceClassification(BertPreTrainedModel):
         )
         self.dropout = nn.Dropout(classifier_dropout)
         #self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.classifier = nn.Linear(30000, config.num_labels)
+        self.pooler_hidden_dimenstion = int(os.environ.get('pooler_hidden_dimention', '30000'))
+        self.classifier = nn.Linear(self.pooler_hidden_dimenstion, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()

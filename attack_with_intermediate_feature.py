@@ -12,8 +12,8 @@ from transformers import AdamW, AutoConfig, AutoModel, AutoTokenizer, LogitsProc
 from models.modeling_bert import AutoModelForSequenceClassification
 from init import get_init
 from constants import BERT_CLS_TOKEN, BERT_SEP_TOKEN, BERT_PAD_TOKEN
-from utilities import get_closest_tokens, get_reconstruction_loss, get_perplexity, fix_special_tokens, remove_padding, compute_pooler
-from tmp import compute_grads
+from utilities import get_closest_tokens, get_reconstruction_loss, get_perplexity, fix_special_tokens, remove_padding
+from tool import compute_grads
 from data_utils import TextDataset
 from args_factory import get_args
 import time
@@ -21,8 +21,12 @@ from transformers import GPT2Tokenizer, GPT2Model, GPT2LMHeadModel
 from scipy.optimize import linear_sum_assignment
 
 args = get_args()
-np.random.seed(args.rng_seed)
-torch.manual_seed(args.rng_seed)
+
+def set_random_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 if args.neptune:
     import neptune
@@ -32,7 +36,7 @@ if args.neptune:
 def get_loss(args, lm, model, ids, x_embeds, true_labels, true_grads, create_graph=False, true_pooler=None):
     perplexity = lm(input_ids=ids, labels=ids).loss
     rec_loss, cosine_loss = get_reconstruction_loss(model, x_embeds, true_labels, true_grads, args, create_graph=create_graph, true_pooler=true_pooler)
-    return perplexity, rec_loss, cosine_loss, rec_loss + args.coeff_perplexity * perplexity + cosine_loss
+    return perplexity, rec_loss, cosine_loss, rec_loss + args.coeff_perplexity * perplexity + args.coeff_pooler_match * cosine_loss
 
 def swap_tokens(args, x_embeds, max_len, cos_ids, lm, model, true_labels, true_grads, true_pooler=None):
     print('Attempt swap', flush=True)
@@ -101,10 +105,11 @@ def reconstruct(args, device, sample, metric, tokenizer, lm, model):
 
     orig_batch = tokenizer(sequences, padding=True, truncation=True, return_tensors='pt').to(device)
     true_embeds = bert_embeddings(orig_batch['input_ids'])
+
     #################
     #################
     # approximation_pooler = compute_pooler(model, true_embeds, true_labels)
-    true_grads, approximation_pooler, cosine_similarity, thresholds = compute_grads(model, true_embeds, true_labels, return_pooler=True, debug=True, args=args) 
+    true_grads, approximation_pooler, cosine_similarity, thresholds = compute_grads(model, true_embeds, true_labels, return_pooler=True, args=args) 
 
     if args.defense_pct_mask is not None:
         for grad in true_grads:
@@ -170,8 +175,6 @@ def reconstruct(args, device, sample, metric, tokenizer, lm, model):
     # Main loop
     best_final_error, best_final_x = None, x_embeds.detach().clone()
     sequence_length = x_embeds.shape[1]
-    # if sequence_length > 10:
-    #     args.n_steps = 2000
 
     for it in range(args.n_steps):
         t_start = time.time()
@@ -255,10 +258,8 @@ def reconstruct(args, device, sample, metric, tokenizer, lm, model):
     x_embeds_proj = bert_embeddings(cos_ids) * x_embeds.norm(dim=2, p=2, keepdim=True) / bert_embeddings(cos_ids).norm(dim=2, p=2, keepdim=True)
     #################
     #################
-    # _, _, _, best_tot_loss = get_loss(args, lm, model, cos_ids, x_embeds_proj, true_labels, true_grads, true_pooler=approximation_pooler)
+
     best_ids = cos_ids
-    # best_x_embeds_proj = x_embeds_proj
-    
     prediction, reference = [], []
     for i in range(best_ids.shape[0]):
         prediction += [remove_padding(tokenizer, best_ids[i])]
@@ -303,38 +304,54 @@ def add_noise_to_model(model, variance):
 
 def main():
     print( '\n\n\nCommand:', ' '.join( sys.argv ), '\n\n\n', flush=True)
+    set_random_seed(args.rng_seed)
+
+    os.environ["ACT"] = args.act
+    os.environ["pooler_hidden_dimention"] = f"{args.hd}"
 
     device = torch.device(args.device)
     metric = load_metric('rouge')
     dataset = TextDataset(args.device, args.dataset, args.split, args.n_inputs, args.batch_size)
 
-    lm = load_gpt2_from_dict("transformer_wikitext-103.pth", device, output_hidden_states=True).to(device)
-    lm.eval()
+    lm = load_gpt2_from_dict(
+        "transformer_wikitext-103.pth", 
+        device, 
+        output_hidden_states=True).to(device)
+    
+    ###################################
+    ########## load model
+    ###################################
+    model = AutoModelForSequenceClassification.from_pretrained(
+        args.bert_path, 
+        ignore_mismatched_sizes=True).to(device)
+    original_hidden_dimention = model.config.hidden_size
 
-    model = AutoModelForSequenceClassification.from_pretrained(args.bert_path, ignore_mismatched_sizes=True).to(device)
-    if True:
-        state_dict = torch.load(f"{args.bert_path}/pytorch_model.bin", map_location="cpu")
-        
-        model.bert.pooler.dense.weight.data[:768, :] = state_dict["bert.pooler.dense.weight"]
-        model.bert.pooler.dense.bias.data[:768] = state_dict["bert.pooler.dense.bias"] 
+    state_dict = torch.load(f"{args.bert_path}/pytorch_model.bin", map_location="cpu")
+    model.bert.pooler.dense.weight.data[:original_hidden_dimention, :] = state_dict["bert.pooler.dense.weight"]
+    model.bert.pooler.dense.bias.data[:original_hidden_dimention] = state_dict["bert.pooler.dense.bias"] 
+    distribution = torch.distributions.MultivariateNormal(
+        loc=torch.zeros(args.rd), 
+        covariance_matrix=torch.eye(args.rd))
+    model.bert.pooler.dense.weight.data[original_hidden_dimention:, :args.rd] = distribution.sample(
+        (args.hd-original_hidden_dimention,))
+    model.bert.pooler.dense.weight.data[original_hidden_dimention:, args.rd:] = 0.0
+    model.classifier.weight.data[0, :] = torch.full((1, args.hd), 1/args.hd).cuda()
+    model.classifier.weight.data[1, :] = torch.full((1, args.hd), 2/args.hd).cuda()
 
-        distribution = torch.distributions.MultivariateNormal(loc=torch.zeros(args.rd), covariance_matrix=torch.eye(args.rd))
-        model.bert.pooler.dense.weight.data[768:, :args.rd] = distribution.sample((args.hd-768,))
-        model.bert.pooler.dense.weight.data[768:, args.rd:] = 0
-        
-        model.classifier.weight.data[0, :] = torch.full((1, args.hd), 1/args.hd).cuda()
-        model.classifier.weight.data[1, :] = torch.full((1, args.hd), 2/args.hd).cuda()
-
-        if args.pretraining_weights == "yes":
-            model.classifier.weight.data[:, :768] = state_dict["cls.predictions.transform.dense.weight"][:2, :]
-            model.classifier.bias.data.copy_(state_dict["cls.predictions.bias"][:2])
-        else:
-            model.classifier.weight.data[:, :768] = state_dict["classifier.weight"]
-            model.classifier.bias.data.copy_(state_dict["classifier.bias"])
+    if args.pretraining_weights == "yes":
+        model.classifier.weight.data[:, :original_hidden_dimention] = \
+        state_dict["cls.predictions.transform.dense.weight"][:2, :]
+        model.classifier.bias.data.copy_(state_dict["cls.predictions.bias"][:2])
+    else:
+        model.classifier.weight.data[:, :original_hidden_dimention] = \
+        state_dict["classifier.weight"]
+        model.classifier.bias.data.copy_(state_dict["classifier.bias"])
         #model.classifier.bias.data.copy_(torch.full((2,), 0))
 
-        # add_noise_to_model(model, 0.00001)
+    if add_noise_to_params == "yes":
+        add_noise_to_model(model, 0.00001)
 
+    lm.eval()
     model.eval()
     
     tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased', use_fast=True)

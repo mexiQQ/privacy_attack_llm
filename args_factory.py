@@ -35,16 +35,19 @@ def get_args():
     parser.add_argument('--use_embedding', action='store_true')
     parser.add_argument('--know_padding', type=bool, default=True)
     parser.add_argument('--init_size', type=float, default=1.4) #
+    parser.add_argument('--lr_decay_type', type=str, default='StepLR')
+
+    # new parameters
+    parser.add_argument('--act', type=str, default='relu')
     parser.add_argument('--coeff_pooler_match', type=float, default=0.1) #
     parser.add_argument('--coeff_pooler_match_margin', type=float, default=0.0) #
     parser.add_argument('--pooler_match_for_init', type=str, default="no") #
     parser.add_argument('--pooler_match_for_optimization', type=str, default="no") #
     parser.add_argument('--pooler_match_for_swap', type=str, default="no") #
-    parser.add_argument('--pretraining-weights', type=str, default="no") #
-    parser.add_argument('--lr_decay_type', type=str, default='StepLR')
+    parser.add_argument('--pretraining_weights', type=str, default="no") #
+    parser.add_argument('--add_noise_to_params', type=str, default="no") #
     parser.add_argument('--rd', type=int, default=100) #
     parser.add_argument('--hd', type=int, default=30000) #
-
     
     # Tuneable params
     # Ours:         coeff_preplexity, coeff_reg, lr, lr_decay
