@@ -13,3 +13,6 @@ Hi, this repo is forked from https://github.com/eth-sri/lamp. We are too late to
 > mv files.sri.inf.ethz.ch/lamp/* ./    
 > rm -rf files.sri.inf.ethz.ch
 
+## Update
+
+We are currently updating the tutorial. Thank you for your patience.
