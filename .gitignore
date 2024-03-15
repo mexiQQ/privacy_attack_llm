@@ -4,3 +4,4 @@ scikit-tensor/
 outputs/
 logs/*
 logs_new/*
+slurm_scripts/*
