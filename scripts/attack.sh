@@ -5,15 +5,15 @@
 #SBATCH --partition=rtx4060ti8g
 #SBATCH --nodelist=c20
 
-cd /home/jli265/projects/privacy_attack_llm
-source ~/.bashrc
-conda activate lamp
+# cd /home/jli265/projects/privacy_attack_llm
+# source ~/.bashrc
+# conda activate lamp
 
-CUDA_VISIBLE_DEVICES=1 python3 attack_with_intermediate_feature.py --dataset cola \
+CUDA_VISIBLE_DEVICES=1 python3 -u attack_with_intermediate_feature.py --dataset cola \
      --split test --loss cos --n_inputs 100 -b 1 \
      --coeff_perplexity 0.2 --coeff_reg 1 --lr 0.01 \
-     --lr_decay 0.89 --tag_factor 0.01 \
      --lr_decay 0.89 \
+     --tag_factor 0.01 \
      --bert_path /mnt/beegfs/jli265/models/models_for_privacy_attack/bert-base-finetuned-cola \
      --lm_path /mnt/beegfs/jli265/models/models_for_privacy_attack/transformer_wikitext-103.pth \
      --n_steps 2000 \

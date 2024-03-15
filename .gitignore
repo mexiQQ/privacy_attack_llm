@@ -3,3 +3,4 @@ __pycache__/
 scikit-tensor/
 outputs/
 logs/*
+logs_new/*
