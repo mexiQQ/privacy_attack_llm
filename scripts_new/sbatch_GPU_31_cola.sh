@@ -45,10 +45,20 @@ run_on_gpu() {
 # Create output directories
 mkdir -p logs_new/logs_c31_cola/
 
-run_on_gpu 0 "output1.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 30000
-run_on_gpu 1 "output2.log" 0.05 0.0 "no" "yes" "no" 1 100 relu 100 30000
-run_on_gpu 2 "output3.log" 0.05 0.0 "no" "yes" "no" 2 50 tanh 100 30000
-run_on_gpu 3 "output4.log" 0.05 0.0 "no" "yes" "no" 2 50 relu 100 30000
+# run_on_gpu 0 "output1.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 30000
+# run_on_gpu 1 "output2.log" 0.05 0.0 "no" "yes" "no" 1 100 relu 100 30000
+# run_on_gpu 2 "output3.log" 0.05 0.0 "no" "yes" "no" 2 50 tanh 100 30000
+# run_on_gpu 3 "output4.log" 0.05 0.0 "no" "yes" "no" 2 50 relu 100 30000
+
+# run_on_gpu 0 "output5.log" 0.05 0.0 "no" "yes" "no" 2 50 tanh 100 30000
+# run_on_gpu 1 "output6.log" 0.05 0.0 "no" "yes" "no" 4 25 tanh 100 30000
+# run_on_gpu 2 "output7.log" 0.05 0.0 "no" "yes" "no" 8 13 tanh 100 30000
+
+run_on_gpu 0 "output8.log" 0.05 0.0 "no" "yes" "no" 1 100 relu 200 30000
+run_on_gpu 1 "output9.log" 0.05 0.0 "no" "yes" "no" 1 100 relu 300 30000
+run_on_gpu 2 "output10.log" 0.05 0.1 "no" "yes" "no" 1 100 relu 100 30000
+run_on_gpu 3 "output11.log" 0.05 0.2 "no" "yes" "no" 1 100 relu 100 30000
+
 
 wait
 

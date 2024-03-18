@@ -45,8 +45,11 @@ run_on_gpu() {
 # Create output directories
 mkdir -p logs_new/logs_c33/
 
-run_on_gpu rotten_tomatoes output1.log 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 30000
-run_on_gpu rotten_tomatoes output2.log 0.05 0.0 "no" "yes" "no" 1 100 relu 100 30000
+# run_on_gpu rotten_tomatoes output1.log 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 30000
+# run_on_gpu rotten_tomatoes output2.log 0.05 0.0 "no" "yes" "no" 1 100 relu 100 30000
+
+# run_on_gpu rotten_tomatoes output3.log 0.05 0.0 "no" "yes" "no" 2 50 tanh 100 30000
+run_on_gpu rotten_tomatoes output4.log 0.05 0.0 "no" "yes" "no" 8 13 tanh 100 30000
 
 wait
 
