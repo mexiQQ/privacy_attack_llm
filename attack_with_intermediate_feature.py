@@ -109,7 +109,7 @@ def reconstruct(args, device, sample, metric, tokenizer, lm, model):
 
     #################
     #################
-    # approximation_pooler = compute_pooler(model, true_embeds, true_labels)
+
     true_grads, approximation_pooler, cosine_similarity, thresholds = compute_grads(model, true_embeds, true_labels, return_pooler=True, args=args) 
 
     if args.defense_pct_mask is not None:
@@ -307,11 +307,15 @@ def main():
     print( '\n\n\nCommand:', ' '.join( sys.argv ), '\n\n\n', flush=True)
     set_random_seed(args.rng_seed)
 
-    os.environ["ACT"] = args.act
-    os.environ["pooler_hidden_dimention"] = f"{args.hd}"
+    if args.pooler_match_for_optimization == "yes":
+        os.environ["ACT"] = args.act
+        os.environ["pooler_hidden_dimention"] = f"{args.hd}"
+    else:
+        os.environ["ACT"] = "tanh"
+        os.environ["pooler_hidden_dimention"] = "768"
 
     device = torch.device(args.device)
-    metric = load_metric('rouge')
+    metric = load_metric('./rouge.py')
     dataset = TextDataset(args.device, args.dataset, args.split, args.n_inputs, args.batch_size)
 
     lm = load_gpt2_from_dict(
@@ -327,27 +331,28 @@ def main():
         ignore_mismatched_sizes=True).to(device)
     original_hidden_dimention = model.config.hidden_size
 
-    state_dict = torch.load(f"{args.bert_path}/pytorch_model.bin", map_location="cpu")
-    model.bert.pooler.dense.weight.data[:original_hidden_dimention, :] = state_dict["bert.pooler.dense.weight"]
-    model.bert.pooler.dense.bias.data[:original_hidden_dimention] = state_dict["bert.pooler.dense.bias"] 
-    distribution = torch.distributions.MultivariateNormal(
-        loc=torch.zeros(args.rd), 
-        covariance_matrix=torch.eye(args.rd))
-    model.bert.pooler.dense.weight.data[original_hidden_dimention:, :args.rd] = distribution.sample(
-        (args.hd-original_hidden_dimention,))
-    model.bert.pooler.dense.weight.data[original_hidden_dimention:, args.rd:] = 0.0
-    model.classifier.weight.data[0, :] = torch.full((1, args.hd), 1/args.hd).cuda()
-    model.classifier.weight.data[1, :] = torch.full((1, args.hd), 2/args.hd).cuda()
+    if args.pooler_match_for_optimization == "yes":
+        state_dict = torch.load(f"{args.bert_path}/pytorch_model.bin", map_location="cpu")
+        model.bert.pooler.dense.weight.data[:original_hidden_dimention, :] = state_dict["bert.pooler.dense.weight"]
+        model.bert.pooler.dense.bias.data[:original_hidden_dimention] = state_dict["bert.pooler.dense.bias"] 
+        distribution = torch.distributions.MultivariateNormal(
+            loc=torch.zeros(args.rd), 
+            covariance_matrix=torch.eye(args.rd))
+        model.bert.pooler.dense.weight.data[original_hidden_dimention:, :args.rd] = distribution.sample(
+            (args.hd-original_hidden_dimention,))
+        model.bert.pooler.dense.weight.data[original_hidden_dimention:, args.rd:] = 0.0
+        model.classifier.weight.data[0, :] = torch.full((1, args.hd), 1/args.hd).cuda()
+        model.classifier.weight.data[1, :] = torch.full((1, args.hd), 2/args.hd).cuda()
 
-    if args.pretraining_weights == "yes":
-        model.classifier.weight.data[:, :original_hidden_dimention] = \
-        state_dict["cls.predictions.transform.dense.weight"][:2, :]
-        model.classifier.bias.data.copy_(state_dict["cls.predictions.bias"][:2])
-    else:
-        model.classifier.weight.data[:, :original_hidden_dimention] = \
-        state_dict["classifier.weight"]
-        model.classifier.bias.data.copy_(state_dict["classifier.bias"])
-        #model.classifier.bias.data.copy_(torch.full((2,), 0))
+        if args.pretraining_weights == "yes":
+            model.classifier.weight.data[:, :original_hidden_dimention] = \
+            state_dict["cls.predictions.transform.dense.weight"][:2, :]
+            model.classifier.bias.data.copy_(state_dict["cls.predictions.bias"][:2])
+        else:
+            model.classifier.weight.data[:, :original_hidden_dimention] = \
+            state_dict["classifier.weight"]
+            model.classifier.bias.data.copy_(state_dict["classifier.bias"])
+            #model.classifier.bias.data.copy_(torch.full((2,), 0))
 
     if args.add_noise_to_params == "yes":
         add_noise_to_model(model, 0.00001)

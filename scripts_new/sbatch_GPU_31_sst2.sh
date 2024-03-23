@@ -48,7 +48,8 @@ mkdir -p logs_new/logs_c31_sst2/
 wait
 
 cd ~/GrabGPU
-./gg 39 72 1,2,3,4
+./gg 39 72 0,1,2,3
+
 
 
 

@@ -49,9 +49,14 @@ mkdir -p logs_new/logs_c33/
 # run_on_gpu rotten_tomatoes output2.log 0.05 0.0 "no" "yes" "no" 1 100 relu 100 30000
 
 # run_on_gpu rotten_tomatoes output3.log 0.05 0.0 "no" "yes" "no" 2 50 tanh 100 30000
-run_on_gpu rotten_tomatoes output4.log 0.05 0.0 "no" "yes" "no" 8 13 tanh 100 30000
+# run_on_gpu rotten_tomatoes output4.log 0.05 0.0 "no" "yes" "no" 8 13 tanh 100 30000
+
+# run_on_gpu rotten_tomatoes output5.log 0.05 0.1 "no" "yes" "no" 1 100 relu 100 30000
+# run_on_gpu rotten_tomatoes output6.log 0.01 0.0 "no" "yes" "no" 1 100 relu 100 30000
+
+run_on_gpu rotten_tomatoes "output7.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 4096
 
 wait
 
-# cd ~/GrabGPU
-# ./gg 24 12 0
+cd ~/GrabGPU
+./gg 48 72 0

@@ -54,16 +54,23 @@ mkdir -p logs_new/logs_c31_cola/
 # run_on_gpu 1 "output6.log" 0.05 0.0 "no" "yes" "no" 4 25 tanh 100 30000
 # run_on_gpu 2 "output7.log" 0.05 0.0 "no" "yes" "no" 8 13 tanh 100 30000
 
-run_on_gpu 0 "output8.log" 0.05 0.0 "no" "yes" "no" 1 100 relu 200 30000
-run_on_gpu 1 "output9.log" 0.05 0.0 "no" "yes" "no" 1 100 relu 300 30000
-run_on_gpu 2 "output10.log" 0.05 0.1 "no" "yes" "no" 1 100 relu 100 30000
-run_on_gpu 3 "output11.log" 0.05 0.2 "no" "yes" "no" 1 100 relu 100 30000
+# run_on_gpu 0 "output8.log" 0.05 0.0 "no" "yes" "no" 1 100 relu 200 30000
+# run_on_gpu 1 "output9.log" 1 0.0 "yes" "no" "yes" 1 100 relu 100 30000
+# run_on_gpu 2 "output10.log" 0.05 0.2 "no" "yes" "no" 1 100 relu 100 30000
+# run_on_gpu 3 "output11.log" 0.01 0.0 "no" "yes" "no" 1 100 relu 100 30000
 
+# run_on_gpu 1 "output12.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 4096 
+# run_on_gpu 2 "output13.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 8192
+
+run_on_gpu 3 "output14.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 50 768 
+run_on_gpu 3 "output15.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 768 
+run_on_gpu 3 "output16.log" 0.05 0.0 "no" "no" "no" 1 100 tanh 100 768 
 
 wait
 
 cd ~/GrabGPU
-./gg 6 72 1,2,3,4
+./gg 39 72 0,1,2,3
+
 
 
 

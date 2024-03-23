@@ -4,6 +4,7 @@ from constants import BERT_CLS_TOKEN, BERT_SEP_TOKEN, BERT_PAD_TOKEN
 import numpy as np
 from scipy.spatial import distance
 from attack.tensor_attack import tensor_feature
+import gc
 from attack_lib import (
     no_tenfact,
     matlab_eigs,
@@ -29,37 +30,98 @@ def compute_grads_tanh(model, x_embeds, y_labels, create_graph=False, return_poo
         else:
             return gradients
         
-    sub_dimension = args.rd  
-    m = args.hd - 768 
+    sub_dimension = args.rd
     d = sub_dimension
     B = len(x_embeds)
-    
-    # activation
-    # even => relu/leakey relu => 特殊处理
-    # odd => sigmoid/tanh => 特殊处理 
-    # squer + cubic => no 特殊处理
-    
-    # second layer gradient
-    g = gradients[-2].cpu().numpy()[1][768:].reshape(m)
-    # first layer gradient
-    g_hat = gradients[-4].cpu().numpy()[768:, :d]
-    W = model.bert.pooler.dense.weight.data[768:, :d].cpu().numpy() # W => m x d
+    if args.hd == 768:
+        m = 768
+        g = gradients[-2].cpu().numpy()[1].reshape(m)
+        g_hat = gradients[-4].cpu().numpy()[:, :d]
+        W = model.bert.pooler.dense.weight.data[:, :d].cpu().numpy() # W => m x d
 
-    T1 = np.zeros((d, d, d))
-    T2 = np.zeros((d, d, d))
-    T3 = np.zeros((d, d, d))
-    for i in range(0, d):
-        for j in range(0, d):
-            for k in range(0, d):
-                T1[i, j, k] = np.sum(g_hat[:, i] * W[:, j] * W[:, k])
-                if j==k:
-                    T1[i,j,k]=T1[i,j,k]-np.sum(g_hat[:, i])
+        g_hat_expanded_i = gradients[-4][:, :d].unsqueeze(2).unsqueeze(3)
+        W_expanded_j = model.bert.pooler.dense.weight.data[:, :d].unsqueeze(1).unsqueeze(3)
+        W_expanded_k = model.bert.pooler.dense.weight.data[:, :d].unsqueeze(1).unsqueeze(2)
+    else:
+        m = args.hd - 768 
+        # activation
+        # even => relu/leakey relu => 特殊处理
+        # odd => sigmoid/tanh => 特殊处理 
+        # squer + cubic => no 特殊处理
+        
+        # second layer gradient
+        g = gradients[-2].cpu().numpy()[1][768:].reshape(m)
+        g_hat = gradients[-4].cpu().numpy()[768:, :d]
+        W = model.bert.pooler.dense.weight.data[768:, :d].cpu().numpy() # W => m x d
 
-    for i in range(0,d):
-        for j in range(0,d):
-            for k in range(0,d):
-                T2[i,j,k]=T1[j,i,k]
-                T3[i,j,k]=T1[k,i,j]
+        g_hat_expanded_i = gradients[-4][768:, :d].unsqueeze(2).unsqueeze(3)
+        W_expanded_j = model.bert.pooler.dense.weight.data[768:, :d].unsqueeze(1).unsqueeze(3)
+        W_expanded_k = model.bert.pooler.dense.weight.data[768:, :d].unsqueeze(1).unsqueeze(2)
+
+    temp1 = torch.empty((W_expanded_j.shape[0], d, d, 1), device="cuda")
+    chunk_size = 8 
+    num_chunks = (temp1.size(0) + chunk_size - 1) // chunk_size
+    for i in range(num_chunks):
+        if i % 50 == 0:
+            print(f"Chunk Index:{i}/{num_chunks}")
+        start_idx = i * chunk_size
+        end_idx = min((i + 1) * chunk_size, temp1.size(0))
+        chunk_g_hat = g_hat_expanded_i[start_idx:end_idx]
+        chunk_W_expanded_j = W_expanded_j[start_idx:end_idx]
+        result_chunk = chunk_g_hat * chunk_W_expanded_j
+        temp1[start_idx:end_idx] = result_chunk
+        del chunk_g_hat
+        del chunk_W_expanded_j
+        del result_chunk
+        torch.cuda.empty_cache()
+    del g_hat_expanded_i
+    del W_expanded_j
+    torch.cuda.empty_cache()
+    gc.collect()
+
+    T1_cuda = torch.empty((d, d, d), device="cuda")
+    for i in range(num_chunks):
+        if i % 50 == 0:
+            print(f"Chunk Index:{i}/{num_chunks}")
+        start_idx = i * chunk_size
+        end_idx = min((i + 1) * chunk_size, temp1.size(0))
+        chunk_temp1 = temp1[start_idx:end_idx]
+        chunk_W_expanded_k = W_expanded_k[start_idx:end_idx]
+        result_chunk = chunk_temp1 * chunk_W_expanded_k
+        T1_cuda += result_chunk.sum(dim=0)
+        del chunk_temp1
+        del chunk_W_expanded_k
+        del result_chunk
+        torch.cuda.empty_cache()
+    gc.collect()
+    g_hat_sum = gradients[-4][768:, :d].sum(dim=0).unsqueeze(-1).unsqueeze(-1)  # [d, 1, 1]
+    mask = torch.eye(d).cuda().unsqueeze(0)
+    T1_cuda -= g_hat_sum * mask
+    T2_cuda = T1_cuda.permute(1, 0, 2)
+    T3_cuda = T1_cuda.permute(2, 1, 0)
+    T1 = T1_cuda.cpu().numpy()
+    T2 = T2_cuda.cpu().numpy()
+    T3 = T3_cuda.cpu().numpy()
+    del T1_cuda
+    del T2_cuda
+    del T3_cuda
+    gc.collect()
+
+    # T1 = np.zeros((d, d, d))
+    # T2 = np.zeros((d, d, d))
+    # T3 = np.zeros((d, d, d))
+    # for i in range(0, d):
+    #     for j in range(0, d):
+    #         for k in range(0, d):
+    #             T1[i, j, k] = np.sum(g_hat[:, i] * W[:, j] * W[:, k])
+    #             if j==k:
+    #                 T1[i,j,k]=T1[i,j,k]-np.sum(g_hat[:, i])
+
+    # for i in range(0,d):
+    #     for j in range(0,d):
+    #         for k in range(0,d):
+    #             T2[i,j,k]=T1[j,i,k]
+    #             T3[i,j,k]=T1[k,i,j]
 
     T = (T1 + T2 + T3)/3
     M = np.sum(T, 2)/np.sqrt(d)
