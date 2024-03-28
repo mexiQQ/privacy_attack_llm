@@ -624,48 +624,13 @@ class BertEncoder(nn.Module):
         )
 
 
-# class BertPooler(nn.Module):
-#     def __init__(self, config):
-#         super().__init__()
-#         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-#         self.activation = nn.Tanh()
-
-#     def forward(self, hidden_states):
-#         # We "pool" the model by simply taking the hidden state corresponding
-#         # to the first token.
-#         first_token_tensor = hidden_states[:, 0]
-#         pooled_output = self.dense(first_token_tensor)
-#         pooled_output = self.activation(pooled_output)
-#         return pooled_output
-
-
-class cube_and_squre_activation(nn.Module):
-    def __init__(self):
-        super().__init__()
-    def forward(self, x):
-        return x ** 3 + x ** 2
-    
 class BertPooler(nn.Module):
     def __init__(self, config):
         super().__init__()
-        # self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.pooler_hidden_dimenstion = int(os.environ.get('pooler_hidden_dimention', '30000'))
-        self.dense = nn.Linear(config.hidden_size, self.pooler_hidden_dimenstion)
-        self.mode = os.environ.get('ACT', 'Unknown') 
-        if self.mode == "tanh":
-            self.activation = nn.Tanh()
-        elif self.mode == "cude+squre":
-            self.activation = cube_and_squre_activation()
-        elif self.mode == "relu":
-            self.activation = nn.ReLU()
-        elif self.mode == "elu":
-            self.activation = nn.ELU()
-        elif self.mode == "selu":
-            self.activation = nn.SELU()
-        else:
-            self.activation = cube_and_squre_activation()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.activation = nn.Tanh()
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states):
         # We "pool" the model by simply taking the hidden state corresponding
         # to the first token.
         first_token_tensor = hidden_states[:, 0]
@@ -1540,9 +1505,7 @@ class BertForSequenceClassification(BertPreTrainedModel):
             config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        #self.classifier = nn.Linear(config.hidden_size, config.num_labels)
-        self.pooler_hidden_dimenstion = int(os.environ.get('pooler_hidden_dimention', '30000'))
-        self.classifier = nn.Linear(self.pooler_hidden_dimenstion, config.num_labels)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1591,9 +1554,8 @@ class BertForSequenceClassification(BertPreTrainedModel):
 
         pooled_output = outputs[1]
 
-        # pooled_output = self.dropout(pooled_output)
+        pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
-        # logits = logits + (logits**2).sum(dim=0).sqrt() * 0.1
 
         loss = None
         if labels is not None:

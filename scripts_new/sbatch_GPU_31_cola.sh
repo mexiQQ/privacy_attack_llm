@@ -62,9 +62,15 @@ mkdir -p logs_new/logs_c31_cola/
 # run_on_gpu 1 "output12.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 4096 
 # run_on_gpu 2 "output13.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 8192
 
-run_on_gpu 3 "output14.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 50 768 
-run_on_gpu 3 "output15.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 768 
-run_on_gpu 3 "output16.log" 0.05 0.0 "no" "no" "no" 1 100 tanh 100 768 
+# run_on_gpu 3 "output14.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 50 768 
+# run_on_gpu 3 "output15.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 768 
+# run_on_gpu 3 "output16.log" 0.05 0.0 "no" "no" "no" 1 100 tanh 100 768 
+
+run_on_gpu 0 "output17.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 4096  # remove normalization
+run_on_gpu 1 "output18.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 8192 # remove normalization
+run_on_gpu 2 "output19.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 768 # remove normalization
+run_on_gpu 3 "output20.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 768 # remove normalization
+run_on_gpu 3 "output21.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 300 768 # remove normalization
 
 wait
 

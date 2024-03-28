@@ -19,8 +19,8 @@ class TextDataset:
             
         idxs = list(range(len(full)))
         np.random.shuffle(idxs)
-        if dataset == 'cola':
-            assert idxs[0] == 2310 # with seed 101
+        # if dataset == 'cola':
+        #     assert idxs[0] == 2310 # with seed 101
 
         n_samples = n_inputs * batch_size
 

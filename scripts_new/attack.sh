@@ -9,25 +9,24 @@
 # source ~/.bashrc
 # conda activate lamp
 
-CUDA_VISIBLE_DEVICES=0 python3 -u attack_with_intermediate_feature.py --dataset cola \
+CUDA_VISIBLE_DEVICES=2 python3 -u attack_with_intermediate_feature.py --dataset sst2 \
      --split test --loss cos --n_inputs 100 -b 1 \
      --coeff_perplexity 0.2 --coeff_reg 1 --lr 0.01 \
      --lr_decay 0.89 \
      --tag_factor 0.01 \
-     --bert_path /mnt/beegfs/jli265/models/models_for_privacy_attack/bert-base-finetuned-cola \
+     --bert_path /mnt/beegfs/jli265/models/models_for_privacy_attack/bert-base-finetuned-sst2 \
      --lm_path /mnt/beegfs/jli265/models/models_for_privacy_attack/transformer_wikitext-103.pth \
      --n_steps 10 \
      --init_candidates 10 \
      --act tanh \
-     --rd 768 \
-     --hd 768 \
+     --rd 100 \
+     --hd 4096 \
      --coeff_pooler_match 0.1 \
      --coeff_pooler_match_margin 0.1 \
      --pooler_match_for_init no \
      --pooler_match_for_optimization yes \
      --pooler_match_for_swap no #> logs_debug/outpu1.txt 2>&1 &
 wait
-
 
 # --no-use_swaps \
 # --init_candidates 500 \

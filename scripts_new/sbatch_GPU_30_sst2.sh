@@ -23,6 +23,7 @@ run_on_gpu() {
     local act="${10}"
     local rd="${11}"
     local hd="${12}"
+    local n_steps="${13}"
 
     CUDA_VISIBLE_DEVICES=$gpu_id python3 -u attack_with_intermediate_feature.py --dataset sst2 \
         --split test --loss cos --n_inputs $n_input -b $batch_size \
@@ -31,7 +32,7 @@ run_on_gpu() {
         --tag_factor 0.01 \
         --bert_path /mnt/beegfs/jli265/models/models_for_privacy_attack/bert-base-finetuned-sst2 \
         --lm_path /mnt/beegfs/jli265/models/models_for_privacy_attack/transformer_wikitext-103.pth \
-        --n_steps 2000 \
+        --n_steps $n_steps \
         --act $act \
         --rd $rd \
         --hd $hd \
@@ -59,13 +60,30 @@ mkdir -p logs_new/logs_c30_sst2/
 # run_on_gpu 2 "output12.log" 0.05 0.0 "no" "yes" "no" 1 100 relu 200 30000
 # run_on_gpu 3 "output13.log" 0.05 0.0 "no" "yes" "no" 1 100 relu 300 30000
 
-run_on_gpu 0 "output10.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 50 768 
-run_on_gpu 0 "output11.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 768 
+# run_on_gpu 0 "output10.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 50 768 
+# run_on_gpu 0 "output11.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 768 
+
 # run_on_gpu 2 "output14.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 4096 
 # run_on_gpu 3 "output15.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 8192
 
-run_on_gpu 1 "output16.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 768 
-run_on_gpu 0 "output17.log" 0.05 0.0 "no" "no" "no" 1 100 tanh 100 768 
+# run_on_gpu 1 "output16.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 768 
+# run_on_gpu 0 "output17.log" 0.05 0.0 "no" "no" "no" 1 100 tanh 100 768 
+
+# run_on_gpu 0 "output18.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 50 768 # remove normalization
+# run_on_gpu 0 "output19.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 100 768 # remove normalization
+# run_on_gpu 1 "output20.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 768 # remove normalization
+# run_on_gpu 2 "output21.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 4096 # remove normalization
+# run_on_gpu 3 "output22.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 8192 # remove normalization
+
+# run_on_gpu 0 "output23.log" 0.1 0.0 "no" "yes" "no" 1 100 tanh 768 4096 2000 # remove normalization
+# run_on_gpu 1 "output24.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 768 500 # remove normalization
+# run_on_gpu 2 "output25.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 4096 500 # remove normalization
+# run_on_gpu 3 "output26.log" 0.05 0.0 "no" "yes" "no" 1 100 tanh 768 8192 500 # remove normalization
+
+run_on_gpu 0 "output27.log" 0.05 0.0 "no" "no" "no" 1 100 tanh 768 768 500 # remove normalization
+run_on_gpu 3 "output28.log" 0.05 0.0 "no" "no" "no" 1 100 tanh 768 4096 500 # remove normalization
+run_on_gpu 1 "output29.log" 0.05 0.0 "no" "no" "no" 1 100 tanh 768 768 250 # remove normalization
+run_on_gpu 2 "output30.log" 0.05 0.0 "no" "no" "no" 1 100 tanh 768 4096 250 # remove normalization
 
 wait
 
